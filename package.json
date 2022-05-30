@@ -42,7 +42,7 @@
     "*.{ts,md}": "yarn run prettier-format"
   },
   "files": [
-    "/dist"
+    "/src"
   ],
   "repository": {
     "type": "git",

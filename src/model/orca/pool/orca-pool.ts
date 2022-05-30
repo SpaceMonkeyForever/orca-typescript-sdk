@@ -1,7 +1,7 @@
 import { u64 } from "@solana/spl-token";
 import { Connection, PublicKey, Keypair } from "@solana/web3.js";
 import Decimal from "decimal.js";
-import { defaultSlippagePercentage } from "../../../constants/orca-defaults";
+import {defaultSlippagePercentage, defaultTxFeeLamports} from "../../../constants/orca-defaults";
 
 import {
   OrcaU64,
@@ -115,13 +115,14 @@ export class OrcaPoolImpl implements OrcaPool {
     );
   }
 
-  public async getQuoteWithPoolAmounts(
+  public getQuoteWithPoolAmountsAndTxFee(
     inputToken: OrcaToken,
     inputAmount: Decimal | OrcaU64,
     inputTokenPoolAmount: u64,
     outputTokenPoolAmount: u64,
-    slippage?: Decimal
-  ): Promise<Quote> {
+    slippage?: Decimal,
+    txFee?: number,
+  ): Quote {
     const slippageTolerance =
       slippage === undefined ? defaultSlippagePercentage : Percentage.fromDecimal(slippage);
 
@@ -133,10 +134,6 @@ export class OrcaPoolImpl implements OrcaPool {
     );
     const inputAmountU64 = U64Utils.toTokenU64(inputAmount, inputPoolToken, "inputAmount");
 
-    const {
-      value: { feeCalculator },
-    } = await this.connection.getRecentBlockhashAndContext("singleGossip");
-
     const quoteParams: QuotePoolParams = {
       inputToken: inputPoolToken,
       outputToken: outputPoolToken,
@@ -144,7 +141,7 @@ export class OrcaPoolImpl implements OrcaPool {
       outputTokenCount: outputTokenPoolAmount,
       feeStructure: feeStructure,
       slippageTolerance: slippageTolerance,
-      lamportsPerSignature: feeCalculator.lamportsPerSignature,
+      lamportsPerSignature: txFee == undefined ? defaultTxFeeLamports : txFee,
       amp: this.poolParams.amp !== undefined ? new u64(this.poolParams.amp) : undefined,
     };
 
@@ -157,6 +154,21 @@ export class OrcaPoolImpl implements OrcaPool {
     }
 
     return quote;
+  }
+
+  public async getQuoteWithPoolAmounts(
+    inputToken: OrcaToken,
+    inputAmount: Decimal | OrcaU64,
+    inputTokenPoolAmount: u64,
+    outputTokenPoolAmount: u64,
+    slippage?: Decimal
+  ): Promise<Quote> {
+    const {
+      value: { feeCalculator },
+    } = await this.connection.getRecentBlockhashAndContext("singleGossip");
+
+    const txFee = feeCalculator.lamportsPerSignature;
+    return this.getQuoteWithPoolAmountsAndTxFee(inputToken, inputAmount, inputTokenPoolAmount, outputTokenPoolAmount, slippage, txFee);
   }
 
   public async swap(
